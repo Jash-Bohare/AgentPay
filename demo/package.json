@@ -1,0 +1,26 @@
+{
+  "name": "demo",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "providers": "tsx mock-providers/price-feed/index.ts & tsx mock-providers/yield-data/index.ts & tsx mock-providers/summarizer/index.ts",
+    "setup": "tsx setup.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.3",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}
