@@ -1,0 +1,6 @@
+last_updated = "2026-06-17T12:30:32Z"
+
+[[contracts]]
+name = "Payment"
+package_name = "Payment"
+package_hash = "hash-1febe8793989be4da5f83d3313b60143f2d12063688702bedc19722feb4cae25"

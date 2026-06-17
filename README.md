@@ -50,7 +50,7 @@ agentpay/
 
 - Registry: `contract-package-d9b87e7ea424d3e93bcde9487f842636184eb2bbb9f10b3377dc7f74a90595f3` ([deploy transaction](https://testnet.cspr.live/transaction/d5f468537557371c32cfd7e23455f6e0802a3b41cb2f7eae486bd753518a31a6))
 - Reputation: `contract-package-56a5fcd172ac50c3cc06fe555fb9806409fde2c012f146803a9afc33b7d397e5` ([deploy transaction](https://testnet.cspr.live/transaction/6741965c75ef5eab22b3d9e8f988d3be4c494767055ac39d3128077a5dbcb42d))
-- Payment: _TBD_
+- Payment: `contract-package-1febe8793989be4da5f83d3313b60143f2d12063688702bedc19722feb4cae25` ([deploy transaction](https://testnet.cspr.live/transaction/278bb5ca7cb062c141f7921f9564ae899c5fd7686f6b9740ffaa77c8ed8a95e6))
 
 ## Quick Start
 
@@ -75,7 +75,7 @@ cd dashboard && npm install && npm run dev
 
 ## How to Verify On-Chain
 
-Both deployed contracts are live on Casper Testnet. Query them directly (env vars are shared across contracts, only the `cd` and binary name change):
+All three contracts are live on Casper Testnet and wired together: Payment calls Reputation cross-contract after every settlement, and Reputation only accepts that call from Payment's address. Query them directly (env vars are shared across contracts, only the `cd` and binary name change):
 
 ```bash
 export ODRA_CASPER_LIVENET_NODE_ADDRESS=https://node.testnet.casper.network
@@ -83,21 +83,25 @@ export ODRA_CASPER_LIVENET_CHAIN_NAME=casper-test
 export ODRA_CASPER_LIVENET_EVENTS_URL=https://node.testnet.casper.network/events
 export ODRA_CASPER_LIVENET_SECRET_KEY_PATH=../../keys/deployer_secret_key.pem
 
-# Registry: read back the listing registered during development
+# Registry: read back a registered listing
 cd contracts/registry
-cargo run --bin registry_cli -- contract Registry get_listing --listing_id 0
+cargo run --bin registry_cli -- contract Registry get_listing --listing_id 1
 
-# Reputation: read back the provider/agent scores recorded during development
+# Payment: read back a settled transaction (fee is exactly 0.5% of gross_amount)
+cd ../payment
+cargo run --bin payment_cli -- contract Payment get_transaction --tx_id 0
+
+# Reputation: read back the provider/agent scores, updated by Payment's cross-contract call
 cd ../reputation
 cargo run --bin reputation_cli -- contract Reputation get_provider_score --wallet_address account-hash-832467189c656e3a73531b63f401480bf9f1e72b00f449c6177d252556d127ff
 cargo run --bin reputation_cli -- contract Reputation get_agent_score --wallet_address account-hash-f6df2b9fc09d2b5f25af65faf36bc3bc4a6537597cc0181f9a2e1458cde387e3
 ```
 
-This proves both contracts' write and read paths work against real testnet state: Registry's `register_listing`/`get_listing`, and Reputation's `set_authorized_caller`/`record_transaction`/`get_provider_score`/`get_agent_score`.
+This proves the full settlement flow end-to-end on real testnet state: a listing registered on Registry, settled through Payment (fee calculated, TxRecord stored), which cross-contract-calls Reputation to update both the provider's and agent's scores — exactly the sequence the live x402 facilitator will run in production.
 
 ## Status
 
-Currently in active development for the Buildathon Qualification Round (deadline June 30, 2026).
+Smart contracts (Registry, Reputation, Payment) are written, tested, deployed, wired, and verified end-to-end on Casper Testnet. Currently in active development for the Buildathon Qualification Round (deadline June 30, 2026).
 
 ## Links
 
