@@ -49,7 +49,7 @@ agentpay/
 ## Contract Addresses (Casper Testnet)
 
 - Registry: `contract-package-d9b87e7ea424d3e93bcde9487f842636184eb2bbb9f10b3377dc7f74a90595f3` ([deploy transaction](https://testnet.cspr.live/transaction/d5f468537557371c32cfd7e23455f6e0802a3b41cb2f7eae486bd753518a31a6))
-- Reputation: _TBD_
+- Reputation: `contract-package-56a5fcd172ac50c3cc06fe555fb9806409fde2c012f146803a9afc33b7d397e5` ([deploy transaction](https://testnet.cspr.live/transaction/6741965c75ef5eab22b3d9e8f988d3be4c494767055ac39d3128077a5dbcb42d))
 - Payment: _TBD_
 
 ## Quick Start
@@ -75,18 +75,25 @@ cd dashboard && npm install && npm run dev
 
 ## How to Verify On-Chain
 
-The Registry contract is live on Casper Testnet. Query it directly:
+Both deployed contracts are live on Casper Testnet. Query them directly (env vars are shared across contracts, only the `cd` and binary name change):
 
 ```bash
+export ODRA_CASPER_LIVENET_NODE_ADDRESS=https://node.testnet.casper.network
+export ODRA_CASPER_LIVENET_CHAIN_NAME=casper-test
+export ODRA_CASPER_LIVENET_EVENTS_URL=https://node.testnet.casper.network/events
+export ODRA_CASPER_LIVENET_SECRET_KEY_PATH=../../keys/deployer_secret_key.pem
+
+# Registry: read back the listing registered during development
 cd contracts/registry
-ODRA_CASPER_LIVENET_NODE_ADDRESS=https://node.testnet.casper.network \
-ODRA_CASPER_LIVENET_CHAIN_NAME=casper-test \
-ODRA_CASPER_LIVENET_EVENTS_URL=https://node.testnet.casper.network/events \
-ODRA_CASPER_LIVENET_SECRET_KEY_PATH=../../keys/deployer_secret_key.pem \
 cargo run --bin registry_cli -- contract Registry get_listing --listing_id 0
+
+# Reputation: read back the provider/agent scores recorded during development
+cd ../reputation
+cargo run --bin reputation_cli -- contract Reputation get_provider_score --wallet_address account-hash-832467189c656e3a73531b63f401480bf9f1e72b00f449c6177d252556d127ff
+cargo run --bin reputation_cli -- contract Reputation get_agent_score --wallet_address account-hash-f6df2b9fc09d2b5f25af65faf36bc3bc4a6537597cc0181f9a2e1458cde387e3
 ```
 
-Returns the on-chain `CSPR/USD Price Feed` listing registered during development, proving the write (`register_listing`) and read (`get_listing`) paths both work against real testnet state.
+This proves both contracts' write and read paths work against real testnet state: Registry's `register_listing`/`get_listing`, and Reputation's `set_authorized_caller`/`record_transaction`/`get_provider_score`/`get_agent_score`.
 
 ## Status
 
