@@ -1,0 +1,33 @@
+node_modules/
+dist/
+build/
+.next/
+out/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# secrets / keys
+*.pem
+keys/
+*secret_key*
+
+# Rust
+target/
+
+# logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# internal planning docs (not for public repo)
+Docs/
