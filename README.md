@@ -22,7 +22,7 @@ AgentPay is a decentralized marketplace and payment protocol that lets AI agents
 
 ## Architecture
 
-Five layers: Casper smart contracts (Odra/Rust) for the on-chain registry, reputation, and payment records; the x402 payment protocol for HTTP-native settlement; an MCP server exposing marketplace discovery and payment as agent tools; lightweight provider middleware that enforces payment before passing requests through; and a Next.js dashboard for providers and agent developers. See [Docs/TechnicalArchitecture.txt](Docs/TechnicalArchitecture.txt) for full detail.
+Five layers: Casper smart contracts (Odra/Rust) for the on-chain registry, reputation, and payment records; the x402 payment protocol for HTTP-native settlement; an MCP server exposing marketplace discovery and payment as agent tools; lightweight provider middleware that enforces payment before passing requests through; and a Next.js dashboard for providers and agent developers.
 
 ## Tech Stack
 
@@ -48,7 +48,7 @@ agentpay/
 
 ## Contract Addresses (Casper Testnet)
 
-- Registry: _TBD_
+- Registry: `contract-package-d9b87e7ea424d3e93bcde9487f842636184eb2bbb9f10b3377dc7f74a90595f3` ([deploy transaction](https://testnet.cspr.live/transaction/d5f468537557371c32cfd7e23455f6e0802a3b41cb2f7eae486bd753518a31a6))
 - Reputation: _TBD_
 - Payment: _TBD_
 
@@ -57,6 +57,11 @@ agentpay/
 ```bash
 # Contracts (requires WSL/Linux — casper-client and cargo-odra don't build on native Windows)
 cd contracts/registry && cargo odra test
+
+# Building the deployable wasm requires rebuilding std with the wasm MVP target
+# (Casper's wasm runtime doesn't yet support the "bulk-memory" feature that
+# Rust 1.87+ enables by default for wasm32-unknown-unknown):
+CARGO_UNSTABLE_BUILD_STD=panic_abort,std cargo odra build
 
 # Backend
 cd backend && npm install && npm run dev
@@ -68,9 +73,24 @@ cd mcp-server && npm install && npm run dev
 cd dashboard && npm install && npm run dev
 ```
 
+## How to Verify On-Chain
+
+The Registry contract is live on Casper Testnet. Query it directly:
+
+```bash
+cd contracts/registry
+ODRA_CASPER_LIVENET_NODE_ADDRESS=https://node.testnet.casper.network \
+ODRA_CASPER_LIVENET_CHAIN_NAME=casper-test \
+ODRA_CASPER_LIVENET_EVENTS_URL=https://node.testnet.casper.network/events \
+ODRA_CASPER_LIVENET_SECRET_KEY_PATH=../../keys/deployer_secret_key.pem \
+cargo run --bin registry_cli -- contract Registry get_listing --listing_id 0
+```
+
+Returns the on-chain `CSPR/USD Price Feed` listing registered during development, proving the write (`register_listing`) and read (`get_listing`) paths both work against real testnet state.
+
 ## Status
 
-Currently in active development for the Buildathon Qualification Round (deadline June 30, 2026). See [Docs/RoadmapandApproach.txt](Docs/RoadmapandApproach.txt) for the full build plan.
+Currently in active development for the Buildathon Qualification Round (deadline June 30, 2026).
 
 ## Links
 

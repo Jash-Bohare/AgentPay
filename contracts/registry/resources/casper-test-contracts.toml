@@ -1,0 +1,6 @@
+last_updated = "2026-06-17T10:41:25Z"
+
+[[contracts]]
+name = "Registry"
+package_name = "Registry"
+package_hash = "hash-d9b87e7ea424d3e93bcde9487f842636184eb2bbb9f10b3377dc7f74a90595f3"
