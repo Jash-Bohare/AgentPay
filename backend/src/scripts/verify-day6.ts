@@ -1,6 +1,8 @@
 import '../env.js';
 import { pool } from '../db/index.js';
+import { providerPrivateKey } from '../keys.js';
 import { accountHashFromPublicKey, loadPrivateKey, signMessage } from '../services/casper.js';
+import { registerListing } from '../services/registry.js';
 import { canonicalizePaymentPayload } from '../types.js';
 import type { X402Payload, X402PaymentPayload, VerifyResponse } from '../types.js';
 import casperSdkDefault from 'casper-js-sdk';
@@ -14,16 +16,18 @@ const PROVIDER_ACCOUNT_HASH = '832467189c656e3a73531b63f401480bf9f1e72b00f449c61
 
 const agentPrivateKey = loadPrivateKey('../keys/agent_secret_key.pem');
 
-function buildPayload(overrides: Partial<X402PaymentPayload> = {}): X402PaymentPayload {
+// Casper enforces a 2.5 CSPR (2,500,000,000 motes) minimum on native transfers,
+// so that's the practical floor for a price-per-call that actually settles
+// on-chain via a plain transfer - see README for the implications on pricing.
+const TEST_PRICE_MOTES = '3000000000';
+
+function buildPayload(listingId: number, overrides: Partial<X402PaymentPayload> = {}): X402PaymentPayload {
   return {
     from: AGENT_ACCOUNT_HASH,
     from_public_key: AGENT_PUBLIC_KEY,
     to: PROVIDER_ACCOUNT_HASH,
-    // Casper enforces a 2.5 CSPR (2,500,000,000 motes) minimum on native transfers,
-    // so that's the practical floor for a price-per-call that actually settles
-    // on-chain via a plain transfer - see README for the implications on pricing.
-    amount: '3000000000',
-    listing_id: 1,
+    amount: TEST_PRICE_MOTES,
+    listing_id: listingId,
     nonce: `verify-day6-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     expires_at: Math.floor(Date.now() / 1000) + 30,
     facilitator_url: BASE_URL,
@@ -74,6 +78,22 @@ async function main() {
     [AGENT_ACCOUNT_HASH, '50000000000'] // 50 CSPR/day, plenty for this test
   );
 
+  // /verify now checks the payload's amount against the listing's real on-chain
+  // price, so this test needs a real listing whose price matches TEST_PRICE_MOTES.
+  console.log('Registering a fresh test listing...');
+  const listingId = await registerListing(
+    {
+      name: 'verify-day6 test listing',
+      description: 'Registered fresh by verify-day6.ts so its price matches the test payloads',
+      endpointUrl: 'https://example.com/verify-day6',
+      pricePerCallMotes: BigInt(TEST_PRICE_MOTES),
+      category: 'Other',
+      rateLimitPerSecond: 10
+    },
+    providerPrivateKey
+  );
+  console.log(`  listing_id: ${listingId}`);
+
   await step('Test 1 - missing fields -> invalid_payload_structure', async () => {
     const { status, json } = await postVerify({});
     if (status !== 400 || json.error !== 'invalid_payload_structure') {
@@ -82,7 +102,7 @@ async function main() {
   });
 
   await step('Test 2 - expired payment -> payment_expired', async () => {
-    const payload = buildPayload({ expires_at: Math.floor(Date.now() / 1000) - 60 });
+    const payload = buildPayload(listingId, { expires_at: Math.floor(Date.now() / 1000) - 60 });
     const { status, json } = await postVerify(signPayload(payload));
     if (status !== 402 || json.error !== 'payment_expired') {
       throw new Error(`expected 402/payment_expired, got ${status}/${json.error}`);
@@ -90,7 +110,7 @@ async function main() {
   });
 
   await step('Test 3 - bad signature -> invalid_signature', async () => {
-    const payload = buildPayload();
+    const payload = buildPayload(listingId);
     const signed = signPayload(payload);
     signed.signature = signed.signature.slice(0, -4) + '0000'; // corrupt the tail
     const { status, json } = await postVerify(signed);
@@ -103,7 +123,7 @@ async function main() {
     const freshKey = PrivateKey.generate(KeyAlgorithm.SECP256K1); // never funded, guaranteed 0 balance
     const freshPublicKeyHex = freshKey.publicKey.toHex();
     const freshAccountHash = accountHashFromPublicKey(freshPublicKeyHex);
-    const payload = buildPayload({ from: freshAccountHash, from_public_key: freshPublicKeyHex });
+    const payload = buildPayload(listingId, { from: freshAccountHash, from_public_key: freshPublicKeyHex });
     const { status, json } = await postVerify(signPayload(payload, freshKey));
     if (status !== 402 || json.error !== 'insufficient_balance') {
       throw new Error(`expected 402/insufficient_balance, got ${status}/${json.error}`);
@@ -111,7 +131,7 @@ async function main() {
   });
 
   await step('Test 5 - valid payment -> valid:true, then duplicate nonce rejected', async () => {
-    const payload = buildPayload();
+    const payload = buildPayload(listingId);
     const signed = signPayload(payload);
 
     const first = await postVerify(signed);
