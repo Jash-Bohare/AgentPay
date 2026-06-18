@@ -1,13 +1,16 @@
 import { createClient } from 'redis';
 
 const redis = createClient({ url: process.env.REDIS_URL! });
-let connected = false;
+let connectPromise: Promise<unknown> | null = null;
 
+// Concurrent calls during startup could otherwise all see "not connected yet"
+// and each call redis.connect(), which throws on the second attempt - caching
+// the in-flight promise means every caller awaits the same single connect().
 async function ensureConnected() {
-  if (!connected) {
-    await redis.connect();
-    connected = true;
+  if (!connectPromise) {
+    connectPromise = redis.connect();
   }
+  await connectPromise;
 }
 
 /**
@@ -26,8 +29,8 @@ export async function checkAndStoreNonce(nonce: string, expiresAt: number): Prom
 }
 
 export async function disconnectNonceStore(): Promise<void> {
-  if (connected) {
+  if (connectPromise) {
     await redis.quit();
-    connected = false;
+    connectPromise = null;
   }
 }
