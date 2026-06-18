@@ -65,6 +65,8 @@ CARGO_UNSTABLE_BUILD_STD=panic_abort,std cargo odra build
 
 # Backend
 cd backend && npm install && npm run dev
+# or via Docker:
+cd backend && docker build -t agentpay-backend . && docker run --env-file .env -p 3001:3001 agentpay-backend
 
 # MCP server
 cd mcp-server && npm install && npm run dev
@@ -133,9 +135,24 @@ Returns `{ "valid": true, "receipt": { "tx_hash": "pending", "settled_amount": "
 
 Run `npm run verify:day6` in `backend/` (with the server running) to exercise all 6 cases end-to-end against live testnet.
 
+The remaining endpoints:
+
+- `POST /provider/register` — registers a listing on Registry (signed by a dedicated test provider wallet) and waits for finality, then mirrors it into Postgres. Returns `{ "listing_id": <number> }`. Body: `{ name, description, endpoint_url, price_per_call, category, rate_limit_per_second }`.
+- `GET /listings?category=<Category>&limit=&offset=` — paginated read of Postgres `listings`.
+- `GET /agent/:wallet/balance` — on-chain CSPR balance plus Postgres daily spending limit/spend-so-far.
+- `GET /agent/:wallet/transactions?limit=&offset=` — paginated read of an agent's settled transactions.
+
+A background sync service (`backend/src/services/sync.ts`) mirrors Registry listings into Postgres every 60s and refreshes each listing's `reputation_tier` from the Reputation contract every 5 minutes — plain `setInterval` polling for the hackathon; production would watch Casper block events instead.
+
+Run `npm run verify:phase2` in `backend/` (with the server running) to exercise the full Phase 2 integration sequence: register a listing → pay for it via `/verify` → confirm the transaction and updated balance → confirm a replay is rejected.
+
+**On-chain reads without gas**: the registry/reputation reads above don't submit transactions or pay gas — `backend/src/services/casper.ts`'s `readContractStorage` queries Odra's contract storage directly via Casper's `state_get_dictionary_item` RPC, reverse-engineered from Odra's own storage-key derivation (`odra-core`'s `ContractEnv::current_key`: `blake2b256(fieldIndexBytes ++ mappingKeyBytes)`, looked up against the contract's `"state"` dictionary). This is the same mechanism Odra's own CLI uses internally for getters, just called directly over RPC instead of through a Rust binary.
+
+**Known testnet behavior**: background settlement (the native transfer plus the `settle_transaction` contract call) typically lands within seconds, but rapid repeated testing against the same facilitator wallet can push this to 60-120s as the network processes a backlog of transactions from that key. `verify:phase2` polls for up to 180s rather than assuming a fixed delay.
+
 ## Status
 
-Smart contracts (Registry, Reputation, Payment) are written, tested, deployed, wired, and verified end-to-end on Casper Testnet. The facilitator backend's `/verify` endpoint is live, tested against 6 real cases including a full on-chain settlement. Currently in active development for the Buildathon Qualification Round (deadline June 30, 2026).
+Smart contracts (Registry, Reputation, Payment) are written, tested, deployed, wired, and verified end-to-end on Casper Testnet. The facilitator backend is feature-complete for Phase 2: `/verify`, `/provider/register`, `/listings`, `/agent/:wallet/balance`, and `/agent/:wallet/transactions` are all live and tested against real testnet state, with a background sync service keeping Postgres aligned with on-chain listings and reputation scores. Currently in active development for the Buildathon Qualification Round (deadline June 30, 2026).
 
 ## Links
 
