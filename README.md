@@ -127,7 +127,9 @@ curl -X POST http://localhost:3001/verify \
   }'
 ```
 
-Returns `{ "valid": true, "receipt": { "tx_hash": "pending", "settled_amount": "...", "facilitator_signature": "...", "timestamp": ... } }` on success, or `{ "valid": false, "error": "<code>" }` with one of: `invalid_payload_structure`, `payment_expired`, `duplicate_nonce`, `public_key_mismatch`, `invalid_signature`, `insufficient_balance`, `daily_limit_exceeded`.
+Returns `{ "valid": true, "receipt": { "tx_hash": "pending", "settled_amount": "...", "facilitator_signature": "...", "timestamp": ... } }` on success, or `{ "valid": false, "error": "<code>" }` with one of: `invalid_payload_structure`, `payment_expired`, `duplicate_nonce`, `public_key_mismatch`, `invalid_signature`, `listing_not_found`, `price_mismatch`, `insufficient_balance`, `daily_limit_exceeded`. `price_mismatch` means the payload's `amount` doesn't match the listing's actual on-chain `price_per_call` (checked via a free storage read, not a transaction) — this stops a provider's middleware from authorizing more than the listed price.
+
+Background settlement is two separate on-chain operations (the transfer, then the Payment contract's `settle_transaction` call). A `transactions` row is inserted with `status = 'transfer_only'` immediately after the transfer succeeds, then updated to `status = 'settled'` only once `settle_transaction` also succeeds — so the funds-moved and bookkeeping-recorded states are never conflated if the second call fails after the first succeeds.
 
 **Known constraint discovered during testing**: Casper enforces a 2.5 CSPR (2,500,000,000 motes) minimum on native transfers, so any listing settled via a plain transfer needs a price-per-call at or above that floor — true sub-cent micropayments would need batching/aggregation, which is out of scope for the hackathon.
 
