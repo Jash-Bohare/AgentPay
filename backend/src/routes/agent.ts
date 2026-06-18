@@ -4,8 +4,13 @@ import { getBalance } from '../services/casper.js';
 
 const router = Router();
 
+const ACCOUNT_HASH_RE = /^(account-hash-)?[0-9a-f]{64}$/i;
+
 router.get('/agent/:wallet/balance', async (req, res) => {
   const wallet = req.params.wallet!;
+  if (!ACCOUNT_HASH_RE.test(wallet)) {
+    return res.status(400).json({ error: 'invalid_wallet' });
+  }
 
   const onChainBalance = await getBalance(wallet);
   const limitRows = await pool.query<{ daily_limit_motes: string; spent_today_motes: string }>(
@@ -24,6 +29,9 @@ router.get('/agent/:wallet/balance', async (req, res) => {
 
 router.get('/agent/:wallet/transactions', async (req, res) => {
   const wallet = req.params.wallet!;
+  if (!ACCOUNT_HASH_RE.test(wallet)) {
+    return res.status(400).json({ error: 'invalid_wallet' });
+  }
   const limit = Math.min(Number(req.query.limit) || 20, 100);
   const offset = Number(req.query.offset) || 0;
 

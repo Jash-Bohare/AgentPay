@@ -17,7 +17,7 @@ router.get('/listings', async (req, res) => {
   params.push(limit, offset);
 
   const rows = await pool.query(
-    `SELECT listing_id, provider_wallet, name, description, endpoint_url, price_motes, category, reputation_tier, total_calls, created_at
+    `SELECT listing_id, provider_wallet, name, description, endpoint_url, price_motes, category, is_active, reputation_tier, total_calls, created_at
      FROM listings
      WHERE ${conditions.join(' AND ')}
      ORDER BY listing_id ASC
