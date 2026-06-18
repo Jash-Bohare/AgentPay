@@ -99,9 +99,43 @@ cargo run --bin reputation_cli -- contract Reputation get_agent_score --wallet_a
 
 This proves the full settlement flow end-to-end on real testnet state: a listing registered on Registry, settled through Payment (fee calculated, TxRecord stored), which cross-contract-calls Reputation to update both the provider's and agent's scores — exactly the sequence the live x402 facilitator will run in production.
 
+## Facilitator API
+
+`POST /verify` — the x402 payment verification endpoint. Provider middleware sends a signed payment payload here; the facilitator validates it (structure, expiry, replay, signature, balance, daily spending limit), then asynchronously settles the CSPR transfer and records it on-chain via the Payment contract's `settle_transaction`.
+
+```bash
+curl -X POST http://localhost:3001/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "protocol": "x402",
+    "version": "1",
+    "scheme": "casper-cspr",
+    "network": "casper-test",
+    "payload": {
+      "from": "<agent account hash>",
+      "from_public_key": "<agent public key hex>",
+      "to": "<provider account hash>",
+      "amount": "3000000000",
+      "listing_id": 1,
+      "nonce": "<uuid-v4>",
+      "expires_at": 1234567890,
+      "facilitator_url": "http://localhost:3001"
+    },
+    "signature": "<hex signature over the canonicalized payload>"
+  }'
+```
+
+Returns `{ "valid": true, "receipt": { "tx_hash": "pending", "settled_amount": "...", "facilitator_signature": "...", "timestamp": ... } }` on success, or `{ "valid": false, "error": "<code>" }` with one of: `invalid_payload_structure`, `payment_expired`, `duplicate_nonce`, `public_key_mismatch`, `invalid_signature`, `insufficient_balance`, `daily_limit_exceeded`.
+
+**Known constraint discovered during testing**: Casper enforces a 2.5 CSPR (2,500,000,000 motes) minimum on native transfers, so any listing settled via a plain transfer needs a price-per-call at or above that floor — true sub-cent micropayments would need batching/aggregation, which is out of scope for the hackathon.
+
+**Hackathon simplification**: the facilitator's own wallet executes the real CSPR transfer to the provider (matching signature verification against the agent's signed authorization), rather than the agent's wallet signing its own transfer. Production would have the agent pre-sign and the facilitator merely relay/broadcast it, so the facilitator never holds any wallet's private key but the agent's own.
+
+Run `npm run verify:day6` in `backend/` (with the server running) to exercise all 6 cases end-to-end against live testnet.
+
 ## Status
 
-Smart contracts (Registry, Reputation, Payment) are written, tested, deployed, wired, and verified end-to-end on Casper Testnet. Currently in active development for the Buildathon Qualification Round (deadline June 30, 2026).
+Smart contracts (Registry, Reputation, Payment) are written, tested, deployed, wired, and verified end-to-end on Casper Testnet. The facilitator backend's `/verify` endpoint is live, tested against 6 real cases including a full on-chain settlement. Currently in active development for the Buildathon Qualification Round (deadline June 30, 2026).
 
 ## Links
 
