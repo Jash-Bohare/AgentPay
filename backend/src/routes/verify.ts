@@ -12,6 +12,7 @@ import {
 } from '../services/casper.js';
 import { checkAndUpdateLimit } from '../services/limits.js';
 import { checkAndStoreNonce } from '../services/nonce.js';
+import { getListing } from '../services/registry.js';
 import { canonicalizePaymentPayload, parseX402Payload } from '../types.js';
 import type { VerifyResponse, X402PaymentPayload } from '../types.js';
 
@@ -67,8 +68,22 @@ router.post('/verify', async (req, res) => {
     return res.status(402).json(body);
   }
 
-  // Step 5: balance
+  // Step 4.5: price match. The payload specifies the amount, so a provider's
+  // middleware can't trick the facilitator into authorizing more than the
+  // listing's actual on-chain price - this is a free storage read, not a
+  // transaction, so it costs no gas and adds no meaningful latency.
   const amount = BigInt(payload.amount);
+  const listing = await getListing(payload.listing_id);
+  if (!listing || !listing.is_active) {
+    const body: VerifyResponse = { valid: false, error: 'listing_not_found' };
+    return res.status(404).json(body);
+  }
+  if (listing.price_per_call !== amount) {
+    const body: VerifyResponse = { valid: false, error: 'price_mismatch' };
+    return res.status(402).json(body);
+  }
+
+  // Step 5: balance
   const balance = await getBalance(payload.from);
   if (balance < amount) {
     const body: VerifyResponse = { valid: false, error: 'insufficient_balance' };
@@ -106,10 +121,14 @@ async function settleInBackground(payload: X402PaymentPayload, amount: bigint): 
   const protocolFee = (amount * PROTOCOL_FEE_BPS) / 10_000n;
   const netAmount = amount - protocolFee;
 
+  // The transfer (real fund movement) and the settle_transaction call (on-chain
+  // bookkeeping + reputation update) are two separate transactions. If the first
+  // succeeds but the second fails, the funds DID move - the row must say so
+  // honestly ('transfer_only') rather than claim full settlement.
   await pool.query(
     `INSERT INTO transactions
        (listing_id, agent_wallet, provider_wallet, gross_amount_motes, protocol_fee_motes, net_amount_motes, on_chain_tx_hash, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'settled')`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'transfer_only')`,
     [payload.listing_id, payload.from, payload.to, amount.toString(), protocolFee.toString(), netAmount.toString(), txHash]
   );
 
@@ -124,6 +143,8 @@ async function settleInBackground(payload: X402PaymentPayload, amount: bigint): 
     },
     facilitatorPrivateKey
   );
+
+  await pool.query(`UPDATE transactions SET status = 'settled' WHERE on_chain_tx_hash = $1`, [txHash]);
 }
 
 export default router;
