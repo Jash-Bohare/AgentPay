@@ -7,8 +7,10 @@ const casperSdk = casperSdkDefault as unknown as typeof import('casper-js-sdk');
 const {
   AccountHash,
   Args,
+  CLValue,
   ContractCallBuilder,
   HttpHandler,
+  Key,
   KeyAlgorithm,
   NativeTransferBuilder,
   PrivateKey,
@@ -38,11 +40,33 @@ function toAccountHash(accountHashHex: string) {
   return AccountHash.fromString(prefixed);
 }
 
+/** Derives the account hash (bare hex, no prefix) that a given public key resolves to. */
+export function accountHashFromPublicKey(publicKeyHex: string): string {
+  return PublicKey.fromHex(publicKeyHex).accountHash().toHex();
+}
+
+/** CLValue factories for building contract call arguments, re-exported so callers
+ *  don't need their own copy of the casper-js-sdk CJS/ESM interop workaround. */
+export const cl = {
+  u64: (value: number | bigint) => CLValue.newCLUint64(value),
+  u512: (value: bigint | string) => CLValue.newCLUInt512(value),
+  accountKey: (accountHashHex: string) => CLValue.newCLKey(Key.newKey(toAccountHash(accountHashHex).toPrefixedString()))
+};
+
 /** Returns the CSPR balance of a wallet, in motes, given its account hash (hex, with or without prefix). */
 export async function getBalance(accountHashHex: string): Promise<bigint> {
   const purseIdentifier = PurseIdentifier.fromAccountHash(toAccountHash(accountHashHex));
-  const result = await rpcClient.queryLatestBalance(purseIdentifier);
-  return BigInt(result.balance.toString());
+  try {
+    const result = await rpcClient.queryLatestBalance(purseIdentifier);
+    return BigInt(result.balance.toString());
+  } catch (err) {
+    // A wallet that has never received funds has no purse on-chain yet - that's
+    // a real zero balance, not an error condition.
+    if (err instanceof Error && err.message.includes('Purse not found')) {
+      return 0n;
+    }
+    throw err;
+  }
 }
 
 /**
