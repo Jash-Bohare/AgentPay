@@ -1,7 +1,5 @@
+import './env.js';
 import express from 'express';
-import dotenv from 'dotenv';
-
-dotenv.config({ quiet: true });
 
 const app = express();
 app.use(express.json());

@@ -34,7 +34,9 @@
     // Recommended Options
     "strict": true,
     "jsx": "react-jsx",
-    "verbatimModuleSyntax": true,
+    // verbatimModuleSyntax disabled: casper-js-sdk ships raw .ts source (not just
+    // .d.ts) under dist/@types/, which trips this flag on any consumer regardless
+    // of their own import style. Confirmed via isolated repro - not fixable on our end.
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
