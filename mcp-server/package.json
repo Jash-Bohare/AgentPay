@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "verify:day8": "tsx src/scripts/verify-day8.ts",
+    "verify:day9": "tsx src/scripts/verify-day9.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

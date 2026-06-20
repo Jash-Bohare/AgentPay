@@ -22,6 +22,11 @@ import { searchApisTool, handleSearchApis } from './tools/search_apis.js';
 import { getApiDetailsTool, handleGetApiDetails } from './tools/get_api_details.js';
 import { callApiTool, handleCallApi } from './tools/call_api.js';
 
+// Tools — Day 9
+import { checkBalanceTool, handleCheckBalance } from './tools/check_balance.js';
+import { getTransactionHistoryTool, handleGetTransactionHistory } from './tools/get_transaction_history.js';
+import { compareProvidersTool, handleCompareProviders } from './tools/compare_providers.js';
+
 dotenv.config({ quiet: true });
 
 // ---------------------------------------------------------------------------
@@ -42,7 +47,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     searchApisTool,
     getApiDetailsTool,
     callApiTool,
-    // TODO Day 9: add check_balance, get_transaction_history, compare_providers
+    checkBalanceTool,
+    getTransactionHistoryTool,
+    compareProvidersTool,
   ],
 }));
 
@@ -63,6 +70,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'call_api':
         return await handleCallApi(args);
+
+      case 'check_balance':
+        return await handleCheckBalance(args);
+
+      case 'get_transaction_history':
+        return await handleGetTransactionHistory(args);
+
+      case 'compare_providers':
+        return await handleCompareProviders(args);
 
       default:
         return {
