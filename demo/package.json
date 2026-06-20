@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "providers": "tsx mock-providers/price-feed/index.ts & tsx mock-providers/yield-data/index.ts & tsx mock-providers/summarizer/index.ts",
+    "price-feed": "tsx mock-providers/price-feed/index.ts",
+    "yield-data": "tsx mock-providers/yield-data/index.ts",
+    "summarizer": "tsx mock-providers/summarizer/index.ts",
     "setup": "tsx setup.ts",
+    "verify:day10": "tsx verify-day10.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
