@@ -304,8 +304,9 @@ export async function waitForTransactionFinality(txHash: string, timeoutMs = 30_
 
   while (Date.now() < deadline) {
     const result = await rpcClient.getTransactionByTransactionHash(txHash);
+    console.log('waitForTransactionFinality result:', JSON.stringify(result, null, 2));
     if (result.executionInfo) {
-      const errorMessage = result.executionInfo.executionResult.errorMessage;
+      const errorMessage = result.executionInfo.executionResult?.errorMessage;
       if (errorMessage) throw new Error(`Transaction ${txHash} failed: ${errorMessage}`);
       return;
     }
