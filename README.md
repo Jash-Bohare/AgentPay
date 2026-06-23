@@ -1,163 +1,210 @@
 # AgentPay
 
-> Stripe for AI agents — payment infrastructure for the autonomous AI economy, built on Casper Network.
+> **Stripe for AI Agents** — payment infrastructure for the autonomous AI economy, built on the Casper Network.
 
-Built for the [Casper Agentic Buildathon 2026](https://www.casper.network/) (Qualification Round, June 1–30, 2026).
+AgentPay is a decentralized registry, reputation protocol, and micropayment gateway that lets AI agents discover, call, and pay for API services autonomously. No credit cards, no pre-negotiated subscriptions, and no human-in-the-loop required.
 
-## The Problem
+---
 
-AI agents can't pay for things. Today, calling a paid API requires a human to create an account, enter a credit card, and manage API keys — agents have no identity, no wallet, no way to prove they can pay. Subscription pricing forces massive overpayment or rate-limiting, and per-call fees on traditional payment rails make true micro-transactions (fractions of a cent) commercially impossible.
+## 🚀 Key Features
 
-## The Solution
+* **x402 Micropayment Protocol**: Embeds cryptographic payment authorizations directly into standard HTTP headers (`X-Payment`). Gates API resources behind verified Casper testnet transactions.
+* **On-Chain API Registry**: A decentralized service directory where providers register endpoints, categories, pricing, and rate-limits.
+* **Autonomous Discovery & Access**: Exposes marketplace tools directly to LLMs through a Model Context Protocol (MCP) server.
+* **Smart Contract Reputation Protocol**: Dynamically adjusts provider and agent reputation scores on-chain after every transaction settlement.
+* **Comprehensive Web Dashboard**: Provides interactive exploration tools for the marketplace, a generated integration code panel, real-time transaction feeds, spending limits, whitelist toggles, and charts.
 
-AgentPay is a decentralized marketplace and payment protocol that lets AI agents discover, access, and pay for APIs autonomously — no human in the loop, no pre-negotiated contracts, no subscriptions. Providers list APIs on-chain with a price per call. Agents discover them through an MCP server, then pay per request using the x402 micropayment protocol, with cryptographic proof of payment embedded directly in the HTTP request. Settlement happens in under a second. AgentPay takes a 0.5% protocol fee on every transaction.
+---
 
-## How It Works
+## 🏗️ Architecture & Interaction Flow
 
-1. A provider connects a Casper wallet and lists their API on-chain (name, description, endpoint, price per call).
-2. An AI agent, connected to the AgentPay MCP server, searches the on-chain registry for the service it needs.
-3. The agent calls the API; its wallet signs an x402 payment authorization attached to the HTTP request.
-4. The provider's middleware verifies the payment proof with the AgentPay facilitator and forwards the request.
-5. CSPR moves from the agent's wallet to the provider's wallet; the transaction and reputation scores are recorded on-chain.
+AgentPay is composed of 5 primary layers:
+1. **Casper Smart Contracts (Odra/Rust)**: Core protocol logic for registry, reputation scoring, and payment records.
+2. **Facilitator Backend (Node.js/Express)**: Orchestrates database sync, replay protection (Redis), validation checks, and off-chain-to-on-chain tx settlement.
+3. **x402 Middleware (TypeScript/NPM package)**: Simple Express middleware that gates provider APIs.
+4. **MCP Server (TypeScript)**: Standardized LLM tool-calling layer for agent search, payment, and details lookup.
+5. **Next.js 15 Web Portal**: A beautiful interface for API discovery, metrics tracking, and agent wallet limit management.
 
-## Architecture
+### System Sequence Flowchart
 
-Five layers: Casper smart contracts (Odra/Rust) for the on-chain registry, reputation, and payment records; the x402 payment protocol for HTTP-native settlement; an MCP server exposing marketplace discovery and payment as agent tools; lightweight provider middleware that enforces payment before passing requests through; and a Next.js dashboard for providers and agent developers.
+The diagram below illustrates a complete discovery and consumption cycle where an AI agent pays for and consumes a gated API service:
 
-## Tech Stack
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User / Human
+    participant Agent as AI Agent (e.g. Claude)
+    participant MCP as AgentPay MCP Server
+    participant Registry as Casper Registry (On-Chain)
+    participant ProviderAPI as Mock Provider API (Port 3010-3012)
+    participant Backend as Facilitator Backend (Port 3001)
+    participant Casper as Casper Testnet Chain
 
-- **Smart Contracts**: Odra (Rust) on Casper Testnet
-- **Backend**: Node.js/TypeScript, Express, PostgreSQL (Supabase), Redis (Upstash)
-- **MCP Server**: `@modelcontextprotocol/sdk`
-- **Provider Middleware**: Express middleware, npm package
-- **Frontend**: Next.js, Tailwind CSS
-- **Payment Protocol**: x402 on Casper
+    User->>Agent: "Get real-time CSPR price using AgentPay"
+    Agent->>MCP: search_apis("CSPR price")
+    MCP->>Backend: GET /listings (Read mirrored list)
+    Backend-->>MCP: Price Feed Listing details
+    MCP-->>Agent: Returns Listing ID (e.g. 14) and Price (0.5 CSPR)
 
-## Repo Structure
+    Agent->>MCP: call_api(listing_id: 14)
+    Note over MCP: Generate x402 payment authorization.<br/>Signs payload using Agent's Private Key.
+    
+    MCP->>ProviderAPI: POST /price (Without X-Payment)
+    ProviderAPI-->>MCP: HTTP 402 Payment Required (Listing Info & Price Hint)
+
+    MCP->>ProviderAPI: POST /price (With X-Payment: <signed x402 JSON>)
+    Note over ProviderAPI: Intercepted by @agentpay/middleware
+
+    ProviderAPI->>Backend: POST /verify (Send signed authorization)
+    Note over Backend: Validates: expiration, signature, nonces (Redis),<br/>and daily limits (Postgres).
+
+    Backend-->>ProviderAPI: HTTP 200 OK (Payment Validated, returns pending receipt)
+    
+    Note over ProviderAPI: Pass request to controller
+    ProviderAPI-->>MCP: HTTP 200 OK (Returns CSPR Price Data)
+    
+    MCP-->>Agent: CSPR USD price is $0.012
+    Agent-->>User: "Here is the price..."
+
+    Note over Backend: Asynchronous Settlement
+    Backend->>Casper: Transfer CSPR (Agent Wallet -> Provider Wallet)
+    Backend->>Casper: settle_transaction(...) Smart Contract call
+    Casper-->>Registry: Cross-contract updates to Reputation scores
+```
+
+---
+
+## 📂 Repository Structure
 
 ```
 agentpay/
-├── contracts/          # Odra smart contracts (Rust): registry, reputation, payment
-├── backend/             # Facilitator server (Node.js/TypeScript)
-├── mcp-server/          # MCP server (Node.js/TypeScript)
-├── middleware/          # Provider npm package
-├── dashboard/            # Next.js frontend
-├── demo/                  # Demo agent scripts and mock provider APIs
-└── Docs/                  # Hackathon planning docs (problem, solution, user flow, architecture, roadmap)
+├── contracts/          # Casper Smart Contracts (Odra/Rust): Registry, Reputation, Payment
+├── backend/            # Facilitator Backend & Faucet API (Node.js/Express)
+├── mcp-server/         # Model Context Protocol Server (TypeScript)
+├── middleware/         # Express x402 Gating Middleware (TypeScript NPM package)
+├── dashboard/          # Next.js 15 Web Application (Developer & Provider Dashboards)
+├── demo/               # Mock API providers, verification, and database setup scripts
+└── keys/               # Developer, Provider, Agent, and Facilitator keys for local tests
 ```
 
-## Contract Addresses (Casper Testnet)
+---
 
-- Registry: `contract-package-d9b87e7ea424d3e93bcde9487f842636184eb2bbb9f10b3377dc7f74a90595f3` ([deploy transaction](https://testnet.cspr.live/transaction/d5f468537557371c32cfd7e23455f6e0802a3b41cb2f7eae486bd753518a31a6))
-- Reputation: `contract-package-56a5fcd172ac50c3cc06fe555fb9806409fde2c012f146803a9afc33b7d397e5` ([deploy transaction](https://testnet.cspr.live/transaction/6741965c75ef5eab22b3d9e8f988d3be4c494767055ac39d3128077a5dbcb42d))
-- Payment: `contract-package-1febe8793989be4da5f83d3313b60143f2d12063688702bedc19722feb4cae25` ([deploy transaction](https://testnet.cspr.live/transaction/278bb5ca7cb062c141f7921f9564ae899c5fd7686f6b9740ffaa77c8ed8a95e6))
+## ⚡ Contract Details (Casper Testnet)
 
-## Quick Start
+* **Registry**: `contract-package-d9b87e7ea424d3e93bcde9487f842636184eb2bbb9f10b3377dc7f74a90595f3` ([deploy transaction](https://testnet.cspr.live/transaction/d5f468537557371c32cfd7e23455f6e0802a3b41cb2f7eae486bd753518a31a6))
+* **Reputation**: `contract-package-56a5fcd172ac50c3cc06fe555fb9806409fde2c012f146803a9afc33b7d397e5` ([deploy transaction](https://testnet.cspr.live/transaction/6741965c75ef5eab22b3d9e8f988d3be4c494767055ac39d3128077a5dbcb42d))
+* **Payment**: `contract-package-1febe8793989be4da5f83d3313b60143f2d12063688702bedc19722feb4cae25` ([deploy transaction](https://testnet.cspr.live/transaction/278bb5ca7cb062c141f7921f9564ae899c5fd7686f6b9740ffaa77c8ed8a95e6))
 
+---
+
+## 🛠️ Local Installation & Startup
+
+Follow this sequence to run the entire system locally:
+
+### 1. Prerequisites & Environment Setup
+Make sure you have a running PostgreSQL database (e.g. Supabase) and a Redis instance (e.g. Upstash Redis). Configure the `.env` files in:
+* `backend/.env` (using `backend/.env.example` as a template)
+* `demo/.env` (using `demo/.env.example` as a template)
+* `mcp-server/.env` (using `mcp-server/.env.example` as a template)
+
+### 2. Start the Backend Facilitator
 ```bash
-# Contracts (requires WSL/Linux — casper-client and cargo-odra don't build on native Windows)
-cd contracts/registry && cargo odra test
-
-# Building the deployable wasm requires rebuilding std with the wasm MVP target
-# (Casper's wasm runtime doesn't yet support the "bulk-memory" feature that
-# Rust 1.87+ enables by default for wasm32-unknown-unknown):
-CARGO_UNSTABLE_BUILD_STD=panic_abort,std cargo odra build
-
-# Backend
-cd backend && npm install && npm run dev
-# or via Docker:
-cd backend && docker build -t agentpay-backend . && docker run --env-file .env -p 3001:3001 agentpay-backend
-
-# MCP server
-cd mcp-server && npm install && npm run dev
-
-# Dashboard
-cd dashboard && npm install && npm run dev
+cd backend
+npm install
+npm run dev
 ```
 
-## How to Verify On-Chain
-
-All three contracts are live on Casper Testnet and wired together: Payment calls Reputation cross-contract after every settlement, and Reputation only accepts that call from Payment's address. Query them directly (env vars are shared across contracts, only the `cd` and binary name change):
-
+### 3. Seed Database & Run Mock Providers
+If you need to seed listings into your database for the first time, run the setup script:
 ```bash
+cd demo
+npm install
+npm run setup
+```
+This will print listing IDs. Verify they match `PRICE_FEED_LISTING_ID`, `YIELD_DATA_LISTING_ID`, and `SUMMARIZER_LISTING_ID` in `demo/.env`.
+
+Once configured, run the mock APIs:
+```bash
+# In three separate terminals inside the /demo directory:
+npm run price-feed
+npm run yield-data
+npm run summarizer
+```
+
+### 4. Run the Next.js Dashboard
+```bash
+cd dashboard
+npm install
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) to view the client-facing UI.
+
+### 5. Start the MCP Server
+```bash
+cd mcp-server
+npm install
+npm run dev
+```
+
+---
+
+## 🧪 Testing and Verification
+
+### Automated Gating Verification
+Run this to ensure the provider middleware correctly blocks calls without payment headers and parses expected 402 parameters:
+```bash
+cd demo
+npm run verify:day10
+```
+
+### Automated MCP Tools Verification
+Run this to verify the discovery, balance checking, and signing payload creation across the 6 MCP tools:
+```bash
+cd mcp-server
+npm run verify:day9
+```
+
+### On-Chain Contract Checks
+Verify state directly on-chain using CLI contract queries:
+```bash
+# Set parameters
 export ODRA_CASPER_LIVENET_NODE_ADDRESS=https://node.testnet.casper.network
 export ODRA_CASPER_LIVENET_CHAIN_NAME=casper-test
-export ODRA_CASPER_LIVENET_EVENTS_URL=https://node.testnet.casper.network/events
 export ODRA_CASPER_LIVENET_SECRET_KEY_PATH=../../keys/deployer_secret_key.pem
 
-# Registry: read back a registered listing
+# Registry: Read registered API
 cd contracts/registry
 cargo run --bin registry_cli -- contract Registry get_listing --listing_id 1
-
-# Payment: read back a settled transaction (fee is exactly 0.5% of gross_amount)
-cd ../payment
-cargo run --bin payment_cli -- contract Payment get_transaction --tx_id 0
-
-# Reputation: read back the provider/agent scores, updated by Payment's cross-contract call
-cd ../reputation
-cargo run --bin reputation_cli -- contract Reputation get_provider_score --wallet_address account-hash-832467189c656e3a73531b63f401480bf9f1e72b00f449c6177d252556d127ff
-cargo run --bin reputation_cli -- contract Reputation get_agent_score --wallet_address account-hash-f6df2b9fc09d2b5f25af65faf36bc3bc4a6537597cc0181f9a2e1458cde387e3
 ```
 
-This proves the full settlement flow end-to-end on real testnet state: a listing registered on Registry, settled through Payment (fee calculated, TxRecord stored), which cross-contract-calls Reputation to update both the provider's and agent's scores — exactly the sequence the live x402 facilitator will run in production.
+---
 
-## Facilitator API
+## 🤖 Integrating with Claude Desktop (Autonomous Flow)
 
-`POST /verify` — the x402 payment verification endpoint. Provider middleware sends a signed payment payload here; the facilitator validates it (structure, expiry, replay, signature, balance, daily spending limit), then asynchronously settles the CSPR transfer and records it on-chain via the Payment contract's `settle_transaction`.
+To watch Claude Desktop automatically call the APIs using AgentPay:
 
-```bash
-curl -X POST http://localhost:3001/verify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "protocol": "x402",
-    "version": "1",
-    "scheme": "casper-cspr",
-    "network": "casper-test",
-    "payload": {
-      "from": "<agent account hash>",
-      "from_public_key": "<agent public key hex>",
-      "to": "<provider account hash>",
-      "amount": "3000000000",
-      "listing_id": 1,
-      "nonce": "<uuid-v4>",
-      "expires_at": 1234567890,
-      "facilitator_url": "http://localhost:3001"
-    },
-    "signature": "<hex signature over the canonicalized payload>"
-  }'
-```
+1. Locate your configuration file on Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+2. Add the following entry:
+   ```json
+   {
+     "mcpServers": {
+       "agentpay": {
+         "command": "npx",
+         "args": [
+           "tsx",
+           "C:/path/to/agentpay/mcp-server/src/index.ts"
+         ],
+         "env": {
+           "AGENT_WALLET_ADDRESS": "f6df2b9fc09d2b5f25af65faf36bc3bc4a6537597cc0181f9a2e1458cde387e3",
+           "AGENT_WALLET_PRIVATE_KEY_PATH": "C:/path/to/agentpay/keys/agent_secret_key.pem",
+           "AGENTPAY_BACKEND_URL": "http://localhost:3001",
+           "CASPER_NETWORK": "casper-test"
+         }
+       }
+     }
+   }
+   ```
+3. Restart Claude Desktop.
+4. Ask: *"Search AgentPay for a price feed, find the price of CSPR, and tell me what it is."*
 
-Returns `{ "valid": true, "receipt": { "tx_hash": "pending", "settled_amount": "...", "facilitator_signature": "...", "timestamp": ... } }` on success, or `{ "valid": false, "error": "<code>" }` with one of: `invalid_payload_structure`, `payment_expired`, `duplicate_nonce`, `public_key_mismatch`, `invalid_signature`, `listing_not_found`, `price_mismatch`, `insufficient_balance`, `daily_limit_exceeded`. `price_mismatch` means the payload's `amount` doesn't match the listing's actual on-chain `price_per_call` (checked via a free storage read, not a transaction) — this stops a provider's middleware from authorizing more than the listed price.
-
-Background settlement is two separate on-chain operations (the transfer, then the Payment contract's `settle_transaction` call). A `transactions` row is inserted with `status = 'transfer_only'` immediately after the transfer succeeds, then updated to `status = 'settled'` only once `settle_transaction` also succeeds — so the funds-moved and bookkeeping-recorded states are never conflated if the second call fails after the first succeeds.
-
-**Known constraint discovered during testing**: Casper enforces a 2.5 CSPR (2,500,000,000 motes) minimum on native transfers, so any listing settled via a plain transfer needs a price-per-call at or above that floor — true sub-cent micropayments would need batching/aggregation, which is out of scope for the hackathon.
-
-**Hackathon simplification**: the facilitator's own wallet executes the real CSPR transfer to the provider (matching signature verification against the agent's signed authorization), rather than the agent's wallet signing its own transfer. Production would have the agent pre-sign and the facilitator merely relay/broadcast it, so the facilitator never holds any wallet's private key but the agent's own.
-
-Run `npm run verify:day6` in `backend/` (with the server running) to exercise all 6 cases end-to-end against live testnet.
-
-The remaining endpoints:
-
-- `POST /provider/register` — registers a listing on Registry (signed by a dedicated test provider wallet) and waits for finality, then mirrors it into Postgres. Returns `{ "listing_id": <number> }`. Body: `{ name, description, endpoint_url, price_per_call, category, rate_limit_per_second }`.
-- `GET /listings?category=<Category>&limit=&offset=` — paginated read of Postgres `listings`.
-- `GET /agent/:wallet/balance` — on-chain CSPR balance plus Postgres daily spending limit/spend-so-far.
-- `GET /agent/:wallet/transactions?limit=&offset=` — paginated read of an agent's settled transactions.
-
-A background sync service (`backend/src/services/sync.ts`) mirrors Registry listings into Postgres every 60s and refreshes each listing's `reputation_tier` from the Reputation contract every 5 minutes — plain `setInterval` polling for the hackathon; production would watch Casper block events instead.
-
-Run `npm run verify:phase2` in `backend/` (with the server running) to exercise the full Phase 2 integration sequence: register a listing → pay for it via `/verify` → confirm the transaction and updated balance → confirm a replay is rejected.
-
-**On-chain reads without gas**: the registry/reputation reads above don't submit transactions or pay gas — `backend/src/services/casper.ts`'s `readContractStorage` queries Odra's contract storage directly via Casper's `state_get_dictionary_item` RPC, reverse-engineered from Odra's own storage-key derivation (`odra-core`'s `ContractEnv::current_key`: `blake2b256(fieldIndexBytes ++ mappingKeyBytes)`, looked up against the contract's `"state"` dictionary). This is the same mechanism Odra's own CLI uses internally for getters, just called directly over RPC instead of through a Rust binary.
-
-**Known testnet behavior**: background settlement (the native transfer plus the `settle_transaction` contract call) typically lands within seconds, but rapid repeated testing against the same facilitator wallet can push this to 60-120s as the network processes a backlog of transactions from that key. `verify:phase2` polls for up to 180s rather than assuming a fixed delay.
-
-## Status
-
-Smart contracts (Registry, Reputation, Payment) are written, tested, deployed, wired, and verified end-to-end on Casper Testnet. The facilitator backend is feature-complete for Phase 2: `/verify`, `/provider/register`, `/listings`, `/agent/:wallet/balance`, and `/agent/:wallet/transactions` are all live and tested against real testnet state, with a background sync service keeping Postgres aligned with on-chain listings and reputation scores. Currently in active development for the Buildathon Qualification Round (deadline June 30, 2026).
-
-## Links
-
-- Demo Video: _TBD_
-- Live Dashboard: _TBD_
-- DoraHacks Submission: _TBD_
+Watch Claude execute the tool calls, query the gated endpoint, trigger on-chain transfers, and return the result autonomously!
