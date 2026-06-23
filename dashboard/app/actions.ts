@@ -227,7 +227,8 @@ export async function getAgentDashboardData(agentWallet: string): Promise<AgentD
        FROM transactions t
        JOIN listings l ON t.listing_id = l.listing_id
        WHERE t.agent_wallet = $1 AND t.status = 'settled'
-       GROUP BY l.category`
+       GROUP BY l.category`,
+      [agentWallet]
     );
 
     // 4. Spend history
@@ -237,7 +238,8 @@ export async function getAgentDashboardData(agentWallet: string): Promise<AgentD
        WHERE agent_wallet = $1 AND status = 'settled'
        GROUP BY date
        ORDER BY MIN(created_at)
-       LIMIT 7`
+       LIMIT 7`,
+      [agentWallet]
     );
 
     const categoriesCount = catRes.rows.map((r) => ({
@@ -304,3 +306,112 @@ export async function getMarketplaceListings(category?: string) {
     throw new Error('Failed to get marketplace listings');
   }
 }
+
+// ---------------------------------------------------------------------------
+// Developer Agent wallet management
+// ---------------------------------------------------------------------------
+
+export interface AgentWalletSummary {
+  wallet: string;
+  balanceMotes: string;
+  dailyLimitMotes: string | null;
+  spentTodayMotes: string;
+  status: 'Active' | 'Paused' | 'Near limit';
+  txCount: number;
+}
+
+export async function getDeveloperAgents(developerWallet: string): Promise<AgentWalletSummary[]> {
+  try {
+    // Collect all agent wallets that appear in transactions OR in agent_limits
+    // For the demo, we seed both the mock "agent" wallet from the env + any that
+    // have actually made transactions through this provider.
+    const walletsRes = await pool.query<{ wallet: string }>(
+      `SELECT DISTINCT agent_wallet as wallet FROM transactions
+       WHERE agent_wallet IS NOT NULL
+       UNION
+       SELECT DISTINCT agent_wallet as wallet FROM agent_limits
+       WHERE agent_wallet IS NOT NULL`,
+    );
+
+    const wallets = walletsRes.rows.map((r) => r.wallet);
+
+    // If there are no wallets yet, return a seeded demo wallet so the dev
+    // dashboard never looks completely empty.
+    const DEMO_AGENT = 'f6df2b9fc09d2b5f25af65faf36bc3bc4a6537597cc0181f9a2e1458cde387e3';
+    if (!wallets.includes(DEMO_AGENT)) wallets.unshift(DEMO_AGENT);
+
+    const results: AgentWalletSummary[] = await Promise.all(
+      wallets.map(async (wallet) => {
+        // Balance from the backend (CSPR.cloud via facilitator)
+        let balanceMotes = '0';
+        try {
+          const balRes = await fetch(`${BACKEND_URL}/agent/${wallet}/balance`);
+          if (balRes.ok) {
+            const data = await balRes.json();
+            balanceMotes = data.balance_motes ?? '0';
+          }
+        } catch {
+          // swallow — CSPR node might be slow; show 0 rather than explode
+        }
+
+        // Limits from DB
+        const limRes = await pool.query<{ daily_limit_motes: string; spent_today_motes: string }>(
+          `SELECT daily_limit_motes, spent_today_motes FROM agent_limits WHERE agent_wallet = $1`,
+          [wallet],
+        );
+        const lim = limRes.rows[0];
+        const dailyLimitMotes = lim?.daily_limit_motes ?? null;
+        const spentTodayMotes = lim?.spent_today_motes ?? '0';
+
+        // Transaction count
+        const txRes = await pool.query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM transactions WHERE agent_wallet = $1`,
+          [wallet],
+        );
+        const txCount = parseInt(txRes.rows[0]?.count ?? '0', 10);
+
+        // Compute status
+        let status: AgentWalletSummary['status'] = 'Active';
+        if (dailyLimitMotes === '0' || dailyLimitMotes === null) {
+          status = 'Active';
+        } else {
+          const limit = BigInt(dailyLimitMotes);
+          const spent = BigInt(spentTodayMotes);
+          if (limit > 0n && spent >= limit) {
+            status = 'Paused';
+          } else if (limit > 0n && spent >= (limit * 80n) / 100n) {
+            status = 'Near limit';
+          }
+        }
+
+        return { wallet, balanceMotes, dailyLimitMotes, spentTodayMotes, status, txCount };
+      }),
+    );
+
+    return results;
+  } catch (err) {
+    console.error('getDeveloperAgents failed:', err);
+    throw new Error('Failed to load developer agents');
+  }
+}
+
+export async function topUpAgentWallet(agentWallet: string): Promise<{
+  success: boolean;
+  tx_hash?: string;
+  explorer_url?: string;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/agent/${agentWallet}/topup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || data.error || 'topup_failed');
+    return { success: true, tx_hash: data.tx_hash, explorer_url: data.explorer_url };
+  } catch (err: any) {
+    console.error('topUpAgentWallet failed:', err);
+    return { success: false, error: err?.message ?? 'topup_failed' };
+  }
+}
+
