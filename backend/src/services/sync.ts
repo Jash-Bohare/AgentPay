@@ -10,9 +10,9 @@ const REPUTATION_SYNC_INTERVAL_MS = 5 * 60_000;
  * Only these APIs should appear in the marketplace/dashboard.
  */
 const DEMO_LISTING_IDS = new Set([
-  26,
-  27,
-  28,
+  14,
+  15,
+  16,
   29
 ]);
 

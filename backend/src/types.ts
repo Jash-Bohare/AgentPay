@@ -60,6 +60,7 @@ export function parseX402Payload(body: unknown): X402Payload | null {
   if (b.protocol !== 'x402' || b.version !== '1' || b.scheme !== 'casper-cspr' || b.network !== 'casper-test') {
     return null;
   }
+  
   if (typeof b.signature !== 'string' || b.signature.length === 0) return null;
   if (typeof b.payload !== 'object' || b.payload === null) return null;
 
@@ -68,10 +69,29 @@ export function parseX402Payload(body: unknown): X402Payload | null {
   if (typeof p.from_public_key !== 'string' || p.from_public_key.length === 0) return null;
   if (typeof p.to !== 'string' || p.to.length === 0) return null;
   if (typeof p.amount !== 'string' || !/^\d+$/.test(p.amount)) return null;
-  if (typeof p.listing_id !== 'number' || !Number.isInteger(p.listing_id)) return null;
+  console.log(
+    'LISTING_ID VALUE:',
+    p.listing_id,
+    'TYPE:',
+    typeof p.listing_id
+  );
+  const listingId =
+    typeof p.listing_id === 'string'
+      ? Number(p.listing_id)
+      : p.listing_id;
+
+  if (typeof listingId !== 'number' || !Number.isInteger(listingId)) {
+    return null;
+  }
   if (typeof p.nonce !== 'string' || p.nonce.length === 0) return null;
   if (typeof p.expires_at !== 'number' || !Number.isInteger(p.expires_at)) return null;
   if (typeof p.facilitator_url !== 'string') return null;
 
-  return body as X402Payload;
+  return {
+    ...body as X402Payload,
+    payload: {
+      ...(body as X402Payload).payload,
+      listing_id: listingId
+    }
+  };
 }

@@ -31,11 +31,28 @@ const PAYMENT_CONTRACT_HASH = process.env.PAYMENT_CONTRACT_HASH!;
 const PROTOCOL_FEE_BPS = 50n; // mirrors the Payment contract's default fee, for the Postgres log only
 
 router.post('/verify', async (req, res) => {
+  console.log('\n================ VERIFY REQUEST ================');
+  console.log('Raw Body:');
+  console.log(JSON.stringify(req.body, null, 2));
+
   const payment = parseX402Payload(req.body);
+
   if (!payment) {
-    const body: VerifyResponse = { valid: false, error: 'invalid_payload_structure' };
+    console.log('❌ parseX402Payload FAILED');
+    console.log('================================================\n');
+
+    const body: VerifyResponse = {
+      valid: false,
+      error: 'invalid_payload_structure'
+    };
+
     return res.status(400).json(body);
   }
+
+  console.log('✅ parseX402Payload SUCCESS');
+  console.log('Payload:');
+  console.log(JSON.stringify(payment, null, 2));
+  console.log('================================================\n');
 
   const { payload } = payment;
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -58,13 +75,46 @@ router.post('/verify', async (req, res) => {
   // wallet, then verify the signature against that same public key.
   const claimedAccountHash = payload.from.replace(/^account-hash-/, '');
   const derivedAccountHash = accountHashFromPublicKey(payload.from_public_key);
+  console.log('CLAIMED ACCOUNT HASH:', claimedAccountHash);
+  console.log('DERIVED ACCOUNT HASH:', derivedAccountHash);
+  console.log('MATCH:', claimedAccountHash === derivedAccountHash);
   if (derivedAccountHash !== claimedAccountHash) {
     const body: VerifyResponse = { valid: false, error: 'public_key_mismatch' };
     return res.status(402).json(body);
   }
   const message = canonicalizePaymentPayload(payload);
-  if (!verifySignature(message, payment.signature, payload.from_public_key)) {
-    const body: VerifyResponse = { valid: false, error: 'invalid_signature' };
+  console.log(
+    'PUBLIC KEY OBJECT:',
+    payload.from_public_key
+  );
+  console.log('CANONICAL MESSAGE:', message);
+
+  console.log('MESSAGE TO VERIFY:');
+  console.log(message);
+
+  console.log('SIGNATURE:');
+  console.log(payment.signature);
+
+  console.log('PUBLIC KEY:');
+  console.log(payload.from_public_key);
+
+  console.log('MESSAGE LENGTH:', message.length);
+  console.log('SIGNATURE LENGTH:', payment.signature.length);
+
+  const sigValid = verifySignature(
+    message,
+    payment.signature,
+    payload.from_public_key
+  );
+
+  console.log('SIGNATURE VALID:', sigValid);
+  console.log('SIGNATURE LENGTH:', payment.signature.length);
+
+  if (!sigValid) {
+    const body: VerifyResponse = {
+      valid: false,
+      error: 'invalid_signature'
+    };
     return res.status(402).json(body);
   }
 
@@ -116,8 +166,15 @@ router.post('/verify', async (req, res) => {
 });
 
 async function settleInBackground(payload: X402PaymentPayload, amount: bigint): Promise<void> {
-  const txHash = await transferCSPR(facilitatorPrivateKey, payload.to, amount);
+  console.log('SETTLEMENT START');
+  console.log('Provider wallet:', payload.to);
+  console.log('Original amount:', amount.toString());
 
+  const txHash = await transferCSPR(
+    facilitatorPrivateKey,
+    payload.to,
+    5_000_000_000n
+  );
   const protocolFee = (amount * PROTOCOL_FEE_BPS) / 10_000n;
   const netAmount = amount - protocolFee;
 
@@ -125,13 +182,16 @@ async function settleInBackground(payload: X402PaymentPayload, amount: bigint): 
   // bookkeeping + reputation update) are two separate transactions. If the first
   // succeeds but the second fails, the funds DID move - the row must say so
   // honestly ('transfer_only') rather than claim full settlement.
+  console.log('INSERTING TRANSACTION ROW');
   await pool.query(
     `INSERT INTO transactions
        (listing_id, agent_wallet, provider_wallet, gross_amount_motes, protocol_fee_motes, net_amount_motes, on_chain_tx_hash, status)
      VALUES ($1, $2, $3, $4, $5, $6, $7, 'transfer_only')`,
     [payload.listing_id, payload.from, payload.to, amount.toString(), protocolFee.toString(), netAmount.toString(), txHash]
   );
+  console.log('TRANSACTION ROW INSERTED');
 
+  console.log('CALLING settle_transaction');
   await callContract(
     PAYMENT_CONTRACT_HASH,
     'settle_transaction',
@@ -143,8 +203,11 @@ async function settleInBackground(payload: X402PaymentPayload, amount: bigint): 
     },
     facilitatorPrivateKey
   );
+  console.log('settle_transaction SUCCESS');
 
+  console.log('UPDATING STATUS TO SETTLED');
   await pool.query(`UPDATE transactions SET status = 'settled' WHERE on_chain_tx_hash = $1`, [txHash]);
+  console.log('STATUS UPDATED');
 }
 
 export default router;

@@ -230,13 +230,30 @@ export function signMessage(privateKey: PrivateKey, message: string): string {
  * The SDK's underlying verifySignature throws on a non-matching signature instead
  * of returning false, so we normalize that into a plain boolean here.
  */
-export function verifySignature(message: string, signatureHex: string, publicKeyHex: string): boolean {
+export function verifySignature(
+  message: string,
+  signatureHex: string,
+  publicKeyHex: string
+): boolean {
   try {
     const publicKey = PublicKey.fromHex(publicKeyHex);
+
     const messageBytes = new TextEncoder().encode(message);
-    const signatureBytes = Uint8Array.from(Buffer.from(signatureHex, 'hex'));
-    return publicKey.verifySignature(messageBytes, signatureBytes);
-  } catch {
+
+    const signatureBytes = Uint8Array.from(
+      Buffer.from(signatureHex, 'hex')
+    );
+
+    console.log('VERIFY DEBUG');
+    console.log('message bytes:', messageBytes.length);
+    console.log('signature bytes:', signatureBytes.length);
+
+    return publicKey.verifySignature(
+      messageBytes,
+      signatureBytes
+    );
+  } catch (err) {
+    console.error('VERIFY ERROR', err);
     return false;
   }
 }
@@ -258,11 +275,39 @@ export async function transferCSPR(
     .amount(amountMotes.toString())
     .id(Date.now())
     .chainName(CHAIN_NAME)
-    .payment(100_000_000)
+    .payment(5_000_000_000)
     .build();
 
   transaction.sign(fromPrivateKey);
-  const result = await rpcClient.putTransaction(transaction);
+
+  console.log('TRANSFER');
+  console.log('TO:', toAccountHashHex);
+  console.log('AMOUNT:', amountMotes.toString());
+
+  console.log('FACILITATOR BALANCE CHECK');
+
+const balance = await getBalance(
+    accountHashFromPublicKey(
+      fromPrivateKey.publicKey.toHex()
+    )
+  );
+
+  console.log('FACILITATOR BALANCE:', balance.toString());
+  console.log('TRANSFER AMOUNT:', amountMotes.toString());
+
+  try {
+    const result = await rpcClient.putTransaction(transaction);
+
+    console.log('TX ACCEPTED');
+    console.log(result);
+
+    return result.transactionHash.toHex();
+  } catch (err) {
+    console.log('PUT TRANSACTION ERROR');
+    console.dir(err, { depth: 10 });
+
+    throw err;
+  }
   return result.transactionHash.toHex();
 }
 
@@ -313,4 +358,13 @@ export async function waitForTransactionFinality(txHash: string, timeoutMs = 30_
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
   throw new Error(`Transaction ${txHash} did not finalize within ${timeoutMs}ms`);
+}
+
+export function debugVerifySignature(
+  message: string,
+  publicKeyHex: string,
+  privateKey: PrivateKey
+): boolean {
+  const sig = signMessage(privateKey, message);
+  return verifySignature(message, sig, publicKeyHex);
 }

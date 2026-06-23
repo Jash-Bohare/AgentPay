@@ -58,7 +58,7 @@ export function buildX402Payload(listing: Listing, agentWalletHash: string): X40
     from_public_key: getAgentPublicKeyHex(),
     to: listing.provider_wallet,
     amount: listing.price_motes,
-    listing_id: listing.listing_id,
+    listing_id: Number(listing.listing_id),
     nonce: generateNonce(),
     expires_at: now + PAYLOAD_TTL_SECONDS,
     facilitator_url: BACKEND_URL,
