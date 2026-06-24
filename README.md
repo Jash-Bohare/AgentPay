@@ -1,12 +1,12 @@
 # AgentPay
 
-> **Stripe for AI Agents** — payment infrastructure for the autonomous AI economy, built on the Casper Network.
+> **Stripe for AI Agents**, payment infrastructure for the autonomous AI economy, built on the Casper Network.
 
 AgentPay is a decentralized registry, reputation protocol, and micropayment gateway that lets AI agents discover, call, and pay for API services autonomously. No credit cards, no pre-negotiated subscriptions, and no human-in-the-loop required.
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 * **x402 Micropayment Protocol**: Embeds cryptographic payment authorizations directly into standard HTTP headers (`X-Payment`). Gates API resources behind verified Casper testnet transactions.
 * **On-Chain API Registry**: A decentralized service directory where providers register endpoints, categories, pricing, and rate-limits.
@@ -16,7 +16,18 @@ AgentPay is a decentralized registry, reputation protocol, and micropayment gate
 
 ---
 
-## 🏗️ Architecture & Interaction Flow
+## Screenshots
+<img width="1585" height="726" alt="image" src="https://github.com/user-attachments/assets/65d934f6-8b75-4224-a5ee-58642d87fc25" />
+<img width="1582" height="727" alt="image" src="https://github.com/user-attachments/assets/e47398f7-3446-4d35-bf3f-567369c1cd6d" />
+<img width="1583" height="726" alt="image" src="https://github.com/user-attachments/assets/1c2580ba-0422-4e85-9f01-269927bd5b03" />
+<img width="2482" height="1754" alt="Manage Agent_page-0001" src="https://github.com/user-attachments/assets/e0f32cb5-7cde-4e0a-b6c8-b3057086eb93" />
+<img width="1754" height="2164" alt="Analytics_page-0001" src="https://github.com/user-attachments/assets/96d8c909-1ddf-444d-a5ee-0cd3faff4653" />
+<img width="796" height="452" alt="image" src="https://github.com/user-attachments/assets/952e1965-ed9e-4a30-baec-1e58ba05fafa" />
+<img width="491" height="711" alt="image" src="https://github.com/user-attachments/assets/2e3a0c2f-a6e5-4c67-9e69-2223b4909481" />
+
+---
+
+## Architecture & Interaction Flow
 
 AgentPay is composed of 5 primary layers:
 1. **Casper Smart Contracts (Odra/Rust)**: Core protocol logic for registry, reputation scoring, and payment records.
@@ -74,7 +85,7 @@ sequenceDiagram
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 ```
 agentpay/
@@ -89,7 +100,7 @@ agentpay/
 
 ---
 
-## ⚡ Contract Details (Casper Testnet)
+## Contract Details (Casper Testnet)
 
 * **Registry**: `contract-package-d9b87e7ea424d3e93bcde9487f842636184eb2bbb9f10b3377dc7f74a90595f3` ([deploy transaction](https://testnet.cspr.live/transaction/d5f468537557371c32cfd7e23455f6e0802a3b41cb2f7eae486bd753518a31a6))
 * **Reputation**: `contract-package-56a5fcd172ac50c3cc06fe555fb9806409fde2c012f146803a9afc33b7d397e5` ([deploy transaction](https://testnet.cspr.live/transaction/6741965c75ef5eab22b3d9e8f988d3be4c494767055ac39d3128077a5dbcb42d))
@@ -97,7 +108,7 @@ agentpay/
 
 ---
 
-## 🛠️ Local Installation & Startup
+## Local Installation & Startup
 
 Follow this sequence to run the entire system locally:
 
@@ -148,7 +159,7 @@ npm run dev
 
 ---
 
-## 🧪 Testing and Verification
+## Testing and Verification
 
 ### Automated Gating Verification
 Run this to ensure the provider middleware correctly blocks calls without payment headers and parses expected 402 parameters:
@@ -179,7 +190,7 @@ cargo run --bin registry_cli -- contract Registry get_listing --listing_id 1
 
 ---
 
-## 🤖 Integrating with Claude Desktop (Autonomous Flow)
+## Integrating with Claude Desktop (Autonomous Flow)
 
 To watch Claude Desktop automatically call the APIs using AgentPay:
 
