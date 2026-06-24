@@ -4,6 +4,15 @@ import { pool } from './lib/db';
 
 const BACKEND_URL = process.env.AGENTPAY_BACKEND_URL || 'http://localhost:3001';
 
+const HIDDEN_LISTING_IDS = new Set([
+  0,1,2,3,4,5,6,7,8,9,
+  10,11,12,13,
+  17,18,
+  19,20,21,22,
+  23,24,25,
+  26,27,28, 31, 32
+]);
+
 export interface Listing {
   listing_id: string;
   provider_wallet: string;
@@ -33,6 +42,10 @@ export async function getProviderStats(providerWallet: string): Promise<Provider
       [providerWallet]
     );
 
+    const filteredListings = listingsRes.rows.filter(
+      (listing) => !HIDDEN_LISTING_IDS.has(Number(listing.listing_id))
+    );
+
     // 2. Fetch total calls and total earnings from transactions
     const statsRes = await pool.query<{ total_earned: string; total_calls: string }>(
       `SELECT 
@@ -43,7 +56,7 @@ export async function getProviderStats(providerWallet: string): Promise<Provider
       [providerWallet]
     );
 
-    const listings = listingsRes.rows;
+    const listings = filteredListings;
     const totalEarningsMotes = statsRes.rows[0]?.total_earned || '0';
     const totalCalls = parseInt(statsRes.rows[0]?.total_calls || '0', 10);
     const activeCount = listings.filter((l) => l.is_active).length;
@@ -300,7 +313,9 @@ export async function getMarketplaceListings(category?: string) {
       params
     );
 
-    return res.rows;
+    return res.rows.filter(
+      (listing) => !HIDDEN_LISTING_IDS.has(Number(listing.listing_id))
+    );
   } catch (err) {
     console.error('getMarketplaceListings failed:', err);
     throw new Error('Failed to get marketplace listings');

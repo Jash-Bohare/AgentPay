@@ -3,9 +3,18 @@ import { pool } from '../db/index.js';
 
 const router = Router();
 
+const HIDDEN_LISTING_IDS = new Set([
+  0,1,2,3,4,5,6,7,8,9,
+  10,11,12,13,
+  17,18,
+  19,20,21,22,
+  23,24,25,
+  26,27,28, 31, 32
+]);
+
 router.get('/listings', async (req, res) => {
   const category = typeof req.query.category === 'string' ? req.query.category : undefined;
-  const limit = Math.min(Number(req.query.limit) || 20, 100);
+  const limit = Math.min(Number(req.query.limit) || 100, 100);
   const offset = Number(req.query.offset) || 0;
 
   const conditions = ['is_active = true'];
@@ -25,7 +34,14 @@ router.get('/listings', async (req, res) => {
     params
   );
 
-  return res.json({ listings: rows.rows, count: rows.rowCount });
+  const filteredListings = rows.rows.filter(
+    (listing) => !HIDDEN_LISTING_IDS.has(Number(listing.listing_id))
+  );
+
+  return res.json({
+    listings: filteredListings,
+    count: filteredListings.length
+  });
 });
 
 export default router;

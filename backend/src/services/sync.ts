@@ -9,12 +9,12 @@ const REPUTATION_SYNC_INTERVAL_MS = 5 * 60_000;
  * Demo whitelist.
  * Only these APIs should appear in the marketplace/dashboard.
  */
-const DEMO_LISTING_IDS = new Set([
-  14,
-  15,
-  16,
-  29
-]);
+// const DEMO_LISTING_IDS = new Set([
+//   14,
+//   15,
+//   16,
+//   29
+// ]);
 
 /** Mirrors Registry's on-chain listings into Postgres.
  * For the hackathon demo we only sync active demo listings.
@@ -23,16 +23,14 @@ export async function syncListingsFromChain(): Promise<void> {
   const allListings = await getAllListings();
 
   const listings = allListings.filter(
-    (listing) =>
-      listing.is_active &&
-      DEMO_LISTING_IDS.has(listing.listing_id)
+    (listing) => listing.is_active
   );
 
   // Optional: remove non-demo listings already present in Postgres
-  await pool.query(`
-  DELETE FROM listings
-  WHERE listing_id NOT IN (26,27,28,29)
-  `);
+  // await pool.query(`
+  // DELETE FROM listings
+  // WHERE listing_id NOT IN (26,27,28,29)
+  // `);
 
   for (const listing of listings) {
     await pool.query(
