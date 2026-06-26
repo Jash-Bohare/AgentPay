@@ -1,33 +1,152 @@
 # AgentPay
 
-> **Stripe for AI Agents** — payment infrastructure for the autonomous AI economy, built on the Casper Network.
+**Payment infrastructure for the autonomous AI economy, built on Casper Network.**
 
-AgentPay is a decentralized registry, reputation protocol, and micropayment gateway that lets AI agents discover, call, and pay for API services autonomously. No credit cards, no pre-negotiated subscriptions, and no human-in-the-loop required.
+> AI agents can reason, plan, and act. But they can't pay for anything. AgentPay fixes that.
 
----
-
-## 🚀 Key Features
-
-* **x402 Micropayment Protocol**: Embeds cryptographic payment authorizations directly into standard HTTP headers (`X-Payment`). Gates API resources behind verified Casper testnet transactions.
-* **On-Chain API Registry**: A decentralized service directory where providers register endpoints, categories, pricing, and rate-limits.
-* **Autonomous Discovery & Access**: Exposes marketplace tools directly to LLMs through a Model Context Protocol (MCP) server.
-* **Smart Contract Reputation Protocol**: Dynamically adjusts provider and agent reputation scores on-chain after every transaction settlement.
-* **Comprehensive Web Dashboard**: Provides interactive exploration tools for the marketplace, a generated integration code panel, real-time transaction feeds, spending limits, whitelist toggles, and charts.
+[![Casper Testnet](https://img.shields.io/badge/Casper-Testnet-6E3FF3)](https://testnet.cspr.live)
+[![Built with Odra](https://img.shields.io/badge/Contracts-Odra%2FRust-orange)](https://odra.dev)
+[![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io)
+[![x402 Protocol](https://img.shields.io/badge/Payment-x402-22C55E)](https://x402.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 ---
 
-## 🏗️ Architecture & Interaction Flow
+## The Problem
 
-AgentPay is composed of 5 primary layers:
-1. **Casper Smart Contracts (Odra/Rust)**: Core protocol logic for registry, reputation scoring, and payment records.
-2. **Facilitator Backend (Node.js/Express)**: Orchestrates database sync, replay protection (Redis), validation checks, and off-chain-to-on-chain tx settlement.
-3. **x402 Middleware (TypeScript/NPM package)**: Simple Express middleware that gates provider APIs.
-4. **MCP Server (TypeScript)**: Standardized LLM tool-calling layer for agent search, payment, and details lookup.
-5. **Next.js 15 Web Portal**: A beautiful interface for API discovery, metrics tracking, and agent wallet limit management.
+Every AI agent running in production today hits the same wall: **it cannot pay for things.**
 
-### System Sequence Flowchart
+When an agent needs to call a paid API, a price feed, a compliance checker, a data enrichment service, the payment infrastructure forces a human back into the loop. Someone has to create an account, enter a credit card, generate an API key, and manage a monthly subscription. The agent borrows a human's identity and credentials to do its job.
 
-The diagram below illustrates a complete discovery and consumption cycle where an AI agent pays for and consumes a gated API service:
+This creates three broken patterns:
+
+- **Subscription waste.** Companies buy $500/mo plans for APIs their agents call 3 times a month or get rate-limited when they need 50,000 calls.
+- **No true micropayments.** Stripe charges $0.30 + 2.9% per transaction. For a $0.001 API call, that fee is 30,000% of the transaction value. True pay-per-use is commercially impossible on traditional rails.
+- **No agent identity.** There is no concept of "this specific agent, authorized to spend up to $X/day, on behalf of company Y." Agents have no financial identity of their own.
+
+The result: the autonomous AI economy is being strangled at birth by payment infrastructure that was never designed for it.
+
+---
+
+## The Solution
+
+AgentPay is a decentralized marketplace and payment protocol that lets AI agents **discover, call, and pay for APIs autonomously** with no human in the loop, no pre-negotiated contracts, and no subscription overhead.
+
+**How it works in one sentence:** An AI agent holds a Casper wallet, discovers services through an on-chain registry via MCP, and pays per request using the x402 micropayment protocol with cryptographic proof of payment embedded directly in the HTTP request header.
+
+The whole thing discovery, payment authorization, API call, and on-chain settlement happens in under 500ms.
+
+---
+
+## Live Demo
+
+> Watch Claude Desktop autonomously find a price feed, pay for it with CSPR, and return the result with zero human involvement and on-chain proof of every transaction.
+
+**[▶ Watch the full demo on YouTube](https://youtu.be/xhCBGg1r7dg)**
+
+---
+
+## Deployed Contracts (Casper Testnet)
+
+All marketplace logic is trustless and lives on-chain. No central authority controls the registry, reputation scores, or payment records.
+
+| Contract | Address | Deploy Tx |
+|----------|---------|-----------|
+| **Registry** | `contract-package-d9b87e7...595f3` | [View on Explorer ↗](https://testnet.cspr.live/transaction/d5f468537557371c32cfd7e23455f6e0802a3b41cb2f7eae486bd753518a31a6) |
+| **Reputation** | `contract-package-56a5fcd...397e5` | [View on Explorer ↗](https://testnet.cspr.live/transaction/6741965c75ef5eab22b3d9e8f988d3be4c494767055ac39d3128077a5dbcb42d) |
+| **Payment** | `contract-package-1febe87...cae25` | [View on Explorer ↗](https://testnet.cspr.live/transaction/278bb5ca7cb062c141f7921f9564ae899c5fd7686f6b9740ffaa77c8ed8a95e6) |
+
+---
+
+## How AgentPay Works
+
+### For API Providers
+
+1. **List once.** Register your API endpoint on-chain — name, description, price per call in CSPR, category, rate limit. No billing system to build. No contracts to sign.
+2. **Install the middleware.** Add one npm package in front of your existing API. It intercepts requests, verifies x402 payment proofs, and passes through paid calls.
+3. **Get paid per call.** CSPR lands in your wallet automatically after every verified request. Your reputation score grows on-chain with every successful response.
+
+### For Agent Developers
+
+1. **Fund a wallet.** Create a Casper wallet for your agent. Set a daily spending limit. Deposit CSPR. That's the only setup step.
+2. **Connect the MCP server.** One line of config. Your agent can now search, compare, and call any registered API using natural language.
+3. **Walk away.** The agent discovers what it needs, pays for it autonomously, and never exceeds the limit you set. You check the dashboard occasionally. You never touch an API key again.
+
+### The Payment Flow
+
+When an agent calls a provider API through AgentPay, this is what happens in a single HTTP round-trip:
+
+```
+Agent decides it needs data
+  → Queries AgentPay MCP: "find me a CSPR price feed"
+  → MCP returns ranked provider list (by reputation + price)
+  → Agent calls the chosen endpoint with X-Payment header:
+     { from: agent_wallet, to: provider_wallet, amount: 500_motes,
+       nonce: uuid, expires_at: +30s, signature: ed25519_sig }
+  → Provider middleware sends payment to facilitator for verification
+  → Facilitator checks: signature ✓ | nonce fresh ✓ | balance ✓ | limit ✓
+  → Provider API responds with data
+  → Agent gets its answer
+  → CSPR settles on-chain in background (~10s)
+  → Reputation contracts update for both agent and provider
+```
+
+Total time experienced by the agent: **under 500ms.**
+
+---
+
+## System Architecture
+
+AgentPay is composed of five layers:
+
+```mermaid
+graph TB
+    subgraph Agents["🤖 AI Agents"]
+        A[Claude / GPT / LangChain]
+    end
+
+    subgraph MCP["MCP Server (TypeScript)"]
+        B[search_apis]
+        C[call_api]
+        D[check_balance]
+        E[get_history]
+    end
+
+    subgraph Provider["API Provider"]
+        F[Provider API]
+        G[agentpay/middleware]
+    end
+
+    subgraph Backend["Facilitator Backend (Node.js)"]
+        H[/verify endpoint/]
+        I[(PostgreSQL)]
+        J[(Redis — Nonces)]
+    end
+
+    subgraph Casper["Casper Testnet (On-Chain)"]
+        K[Registry Contract]
+        L[Reputation Contract]
+        M[Payment Contract]
+    end
+
+    A -->|MCP tool calls| MCP
+    C -->|HTTP + X-Payment header| G
+    G -->|x402 verification| H
+    H --> I
+    H --> J
+    H -->|CSPR transfer| Casper
+    M -->|cross-contract call| L
+    MCP -->|reads listings| Backend
+    Backend -->|syncs registry| K
+
+    style Agents fill:#1a1a2e,stroke:#5E5CE6,color:#F0F0F4
+    style MCP fill:#111114,stroke:#5E5CE6,color:#F0F0F4
+    style Provider fill:#111114,stroke:#2A2A32,color:#F0F0F4
+    style Backend fill:#111114,stroke:#2A2A32,color:#F0F0F4
+    style Casper fill:#0f1923,stroke:#22C55E,color:#F0F0F4
+```
+
+### Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -74,7 +193,35 @@ sequenceDiagram
 
 ---
 
-## 📂 Repository Structure
+## Key Features
+
+### x402 Micropayment Protocol
+HTTP-native payment standard. A cryptographically signed payment authorization is embedded directly into the `X-Payment` request header. No transaction round-trip before the API call, payment proof travels with the request. Replay protection via Redis-backed nonce cache. Optimistic settlement means agents experience no latency.
+
+### On-Chain API Registry
+Providers register endpoints, descriptions, pricing, and rate limits directly on Casper using the Registry contract (Odra/Rust). The registry is public, permissionless, and immutable. No platform gatekeeping. Any provider can list. Any agent can query.
+
+### Reputation Protocol
+Every settled transaction updates both the provider's and agent's on-chain reputation score. Scores track: total calls, success rate, uptime, and payment history. Providers with higher reputation rank higher in agent search results. Agents with strong payment history unlock better rates. The market self-organizes, no central authority decides who is trustworthy.
+
+### MCP Server (6 Tools)
+Any MCP-compatible agent framework (Claude, LangChain, AutoGPT) can connect with one config entry. Tools exposed:
+- `search_apis` — discover providers by natural language query, category, reputation, price
+- `call_api` — make a paid API call with automatic x402 payment handling
+- `get_api_details` — full provider details including reputation and sample response
+- `check_balance` — agent wallet balance and daily spend remaining
+- `get_transaction_history` — full payment history for audit and debugging
+- `compare_providers` — side-by-side comparison of multiple listings
+
+### Enforced Spending Limits
+Agent wallets operate under developer-configured daily spending limits enforced at the facilitator level before any payment is authorized. Agents can never overspend. Limits are adjustable from the dashboard without touching any contract.
+
+### Business Model
+AgentPay takes a **0.5% protocol fee** on every transaction, collected automatically by the Payment smart contract. No sales team. No invoicing. Revenue scales directly with agent commerce volume on the platform.
+
+---
+
+## Repository Structure
 
 ```
 agentpay/
@@ -98,25 +245,32 @@ agentpay/
 
 ---
 
-## ⚡ Contract Details (Casper Testnet)
+## Tech Stack
 
-* **Registry**: `contract-package-d9b87e7ea424d3e93bcde9487f842636184eb2bbb9f10b3377dc7f74a90595f3` ([deploy transaction](https://testnet.cspr.live/transaction/d5f468537557371c32cfd7e23455f6e0802a3b41cb2f7eae486bd753518a31a6))
-* **Reputation**: `contract-package-56a5fcd172ac50c3cc06fe555fb9806409fde2c012f146803a9afc33b7d397e5` ([deploy transaction](https://testnet.cspr.live/transaction/6741965c75ef5eab22b3d9e8f988d3be4c494767055ac39d3128077a5dbcb42d))
-* **Payment**: `contract-package-1febe8793989be4da5f83d3313b60143f2d12063688702bedc19722feb4cae25` ([deploy transaction](https://testnet.cspr.live/transaction/278bb5ca7cb062c141f7921f9564ae899c5fd7686f6b9740ffaa77c8ed8a95e6))
+| Layer | Technology |
+|-------|-----------|
+| Smart Contracts | Rust + Odra Framework → Casper WASM |
+| Backend | Node.js, TypeScript, Express |
+| Database | PostgreSQL (Supabase) + Redis (Upstash) |
+| MCP Server | TypeScript + `@modelcontextprotocol/sdk` |
+| Middleware | TypeScript NPM package |
+| Frontend | Next.js 15, Tailwind CSS |
+| Blockchain SDK | `casper-js-sdk` |
+| Payments | x402 Protocol over HTTP |
 
 ---
 
-## 🛠️ Local Installation & Startup
+## Local Setup
 
-Follow this sequence to run the entire system locally:
+### Prerequisites
+- Node.js 20+
+- Rust + `wasm32-unknown-unknown` target
+- PostgreSQL instance (Supabase free tier works)
+- Redis instance (Upstash free tier works)
+- Casper Wallet browser extension
 
-### 1. Prerequisites & Environment Setup
-Make sure you have a running PostgreSQL database (e.g. Supabase) and a Redis instance (e.g. Upstash Redis). Configure the `.env` files in:
-* `backend/.env` (using `backend/.env.example` as a template)
-* `demo/.env` (using `demo/.env.example` as a template)
-* `mcp-server/.env` (using `mcp-server/.env.example` as a template)
-
-### 2. Start the Backend Facilitator
+### Step 1 — Environment
+Copy and fill the env files:
 ```bash
 cp backend/.env.example backend/.env
 cp demo/.env.example demo/.env
@@ -134,17 +288,13 @@ cd demo && npm install && npm run setup
 ```
 Note the listing IDs printed. Verify they match the IDs in `demo/.env`, then start the mock APIs:
 ```bash
-cd mcp-server
-npm install
-npm run dev
+# Three separate terminals, all inside /demo
+npm run price-feed    # Port 3010 — CSPR/USD price feed
+npm run yield-data    # Port 3011 — DeFi yield rates
+npm run summarizer    # Port 3012 — Text summarization
 ```
 
----
-
-## 🧪 Testing and Verification
-
-### Automated Gating Verification
-Run this to ensure the provider middleware correctly blocks calls without payment headers and parses expected 402 parameters:
+### Step 4 — Start the dashboard
 ```bash
 cd dashboard && npm install && npm run dev
 # Open http://localhost:3000
